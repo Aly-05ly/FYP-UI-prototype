@@ -1,0 +1,6 @@
+{
+  "name": "DSDNet-Receipt",
+  "description": "Evidence-based thermal receipt recovery, pixel-wise authenticity heatmap analysis, and structured field verification workspace for SME document reviewers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
