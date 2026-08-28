@@ -1,13 +1,20 @@
 import { ReceiptDocument, AuditRecord, EvaluationMetric, AppSettings, ReceiptField } from '../types';
 import { generateReceiptImages, ReceiptRenderConfig } from '../utils/receiptCanvas';
+import { calculateAfieldScore, evaluateFieldDecision } from '../utils/fieldScoring';
 
 export const INITIAL_SETTINGS: AppSettings = {
-  processingMethod: 'DSDNet-v2.2-DualBranch (Conservative)',
+  processingMethod: 'Unrolled DSDNet (Conservative)',
   baselineMode: 'Proposed (Restoration + Authenticity + Abstention)',
-  traceSupportThreshold: 0.75,
+  tauAccept: 0.85,
+  tauWarn: 0.70,
+  traceSupportThreshold: 0.85,
   ocrConfidenceThreshold: 0.80,
   strictHighRiskMultiplier: 1.15,
   autoAbstainLowSupport: true,
+  evaluationMode: false,
+  unrollingIterationsK: 4,
+  multiScaleBranchesM: 3,
+  quantileQ: 0.10,
   localStoragePath: '/data/research/receipts_audit.db',
   dataRetentionDays: 90,
   reviewerName: 'A. Rahman (Lead Reviewer)',
@@ -27,7 +34,20 @@ const rawPresetConfigs: Array<{
   degradationType: 'thermal_fading' | 'uneven_lighting' | 'creased_tear' | 'oil_stain' | 'heavy_blur';
   degradationSeverity: 'mild' | 'moderate' | 'severe';
   renderConfig: ReceiptRenderConfig;
-  fields: Array<Omit<ReceiptField, 'originalExtractedValue' | 'isAbstained' | 'history'> & { originalExtractedValue?: string }>;
+  fields: Array<{
+    id: string;
+    key: string;
+    name: string;
+    value: string;
+    originalExtractedValue?: string;
+    boundingBox: { x: number; y: number; width: number; height: number };
+    ocrConfidence: number;
+    traceSupportScore: number;
+    ruleCheckStatus: 'passed' | 'warning' | 'failed';
+    ruleCheckMessage: string;
+    riskCategory: 'high' | 'medium' | 'low';
+    evidenceRegionDescription?: string;
+  }>;
   overallDecision: 'accepted' | 'warning' | 'manual_verification';
   reviewerNotes: string;
 }> = [
@@ -66,11 +86,10 @@ const rawPresetConfigs: Array<{
         value: 'KEDAI KOPI BUKIT BINTANG',
         boundingBox: { x: 10, y: 3.5, width: 80, height: 5.5 },
         ocrConfidence: 0.98,
-        traceSupportScore: 0.94,
+        traceSupportScore: 0.95,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Matches SME merchant registry format & clear letterhead',
         riskCategory: 'medium',
-        decisionStatus: 'accepted',
         evidenceRegionDescription: 'Clear thermal ink absorption footprint without fading.'
       },
       {
@@ -80,11 +99,10 @@ const rawPresetConfigs: Array<{
         value: 'INV-2026-88412',
         boundingBox: { x: 5, y: 19.5, width: 45, height: 4 },
         ocrConfidence: 0.95,
-        traceSupportScore: 0.91,
+        traceSupportScore: 0.93,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid invoice prefix standard [INV-YYYY-XXXXX]',
         riskCategory: 'high',
-        decisionStatus: 'accepted',
         evidenceRegionDescription: 'High stroke continuity in alphanumeric block.'
       },
       {
@@ -94,11 +112,10 @@ const rawPresetConfigs: Array<{
         value: '14/08/2026',
         boundingBox: { x: 55, y: 19.5, width: 40, height: 4 },
         ocrConfidence: 0.94,
-        traceSupportScore: 0.89,
+        traceSupportScore: 0.92,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid DD/MM/YYYY calendar date within current fiscal quarter',
         riskCategory: 'high',
-        decisionStatus: 'accepted',
         evidenceRegionDescription: 'Clear date glyph edges.'
       },
       {
@@ -108,12 +125,11 @@ const rawPresetConfigs: Array<{
         value: 'W10-1808-32000012',
         boundingBox: { x: 15, y: 13, width: 70, height: 4 },
         ocrConfidence: 0.96,
-        traceSupportScore: 0.92,
+        traceSupportScore: 0.94,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid Malaysian SST Registration Number format [W10-XXXX-XXXXXXXX]',
         riskCategory: 'high',
-        decisionStatus: 'accepted',
-        evidenceRegionDescription: 'High confidence trace across all 15 characters.'
+        evidenceRegionDescription: 'High confidence authenticity support across all characters.'
       },
       {
         id: 'f5',
@@ -121,13 +137,12 @@ const rawPresetConfigs: Array<{
         name: 'Subtotal Amount',
         value: 'RM 45.85',
         boundingBox: { x: 5, y: 56.5, width: 90, height: 4 },
-        ocrConfidence: 0.91,
-        traceSupportScore: 0.85,
+        ocrConfidence: 0.93,
+        traceSupportScore: 0.92,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Sum of item rows (9.60 + 7.20 + 14.50 + 14.55 = 45.85) equals subtotal',
         riskCategory: 'medium',
-        decisionStatus: 'accepted',
-        evidenceRegionDescription: 'Trace support confirmed with arithmetic validation.'
+        evidenceRegionDescription: 'Authenticity support confirmed with arithmetic validation.'
       },
       {
         id: 'f6',
@@ -135,12 +150,11 @@ const rawPresetConfigs: Array<{
         name: 'Tax Amount (SST 6%)',
         value: 'RM 2.75',
         boundingBox: { x: 5, y: 60, width: 90, height: 4 },
-        ocrConfidence: 0.78,
-        traceSupportScore: 0.71,
+        ocrConfidence: 0.88,
+        traceSupportScore: 0.82,
         ruleCheckStatus: 'warning',
         ruleCheckMessage: 'Partial fading detected on decimal "75". Calculated 6% of 45.85 = 2.751 ≈ 2.75',
         riskCategory: 'high',
-        decisionStatus: 'warning',
         evidenceRegionDescription: 'Faint ink tail on decimal "75". Heatmap displays moderate uncertainty (amber zone).'
       },
       {
@@ -149,12 +163,11 @@ const rawPresetConfigs: Array<{
         name: 'Total Amount',
         value: 'RM 48.60',
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
-        ocrConfidence: 0.89,
-        traceSupportScore: 0.82,
+        ocrConfidence: 0.93,
+        traceSupportScore: 0.92,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Subtotal (45.85) + Tax (2.75) matches Total (48.60)',
         riskCategory: 'high',
-        decisionStatus: 'accepted',
         evidenceRegionDescription: 'Reconstructed digits cross-verified with line item arithmetic.'
       }
     ]
@@ -168,7 +181,7 @@ const rawPresetConfigs: Array<{
     degradationType: 'thermal_fading',
     degradationSeverity: 'severe',
     overallDecision: 'manual_verification',
-    reviewerNotes: 'Severe thermal head heat loss. The tax amount and subtotal digits are heavily faded below minimum trace threshold (0.75). System abstained.',
+    reviewerNotes: 'Severe thermal head heat loss. The tax amount and subtotal digits are heavily faded below minimum threshold. System abstained.',
     renderConfig: {
       merchantName: 'Syarikat Percetakan Mega Sdn Bhd',
       receiptNumber: 'CS-902148',
@@ -195,8 +208,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.91,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Clear business name header',
-        riskCategory: 'medium',
-        decisionStatus: 'accepted'
+        riskCategory: 'medium'
       },
       {
         id: 'm2',
@@ -208,8 +220,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.84,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Invoice ID matched standard pattern',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'm3',
@@ -221,8 +232,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.82,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid date within fiscal window',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'm4',
@@ -234,8 +244,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.88,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid SST format',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'm5',
@@ -243,12 +252,11 @@ const rawPresetConfigs: Array<{
         name: 'Tax Amount (SST 6%)',
         value: '[Uncertain: ~RM 7.20]',
         boundingBox: { x: 5, y: 60, width: 90, height: 4 },
-        ocrConfidence: 0.42,
+        ocrConfidence: 0.48,
         traceSupportScore: 0.38,
         ruleCheckStatus: 'failed',
-        ruleCheckMessage: 'Stroke trace support 0.38 is below threshold (0.75). Evidence insufficient.',
+        ruleCheckMessage: 'Stroke authenticity support 0.38 is below threshold (0.70). Evidence insufficient.',
         riskCategory: 'high',
-        decisionStatus: 'manual_verification',
         evidenceRegionDescription: 'Thermal fading rendered decimal numbers illegible. Authenticity heatmap shows crimson (low support) zone.'
       },
       {
@@ -257,12 +265,11 @@ const rawPresetConfigs: Array<{
         name: 'Total Amount',
         value: '[Abstained: ~RM 127.20]',
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
-        ocrConfidence: 0.51,
+        ocrConfidence: 0.54,
         traceSupportScore: 0.46,
         ruleCheckStatus: 'failed',
-        ruleCheckMessage: 'High-risk field trace support 0.46 is below strict threshold (0.86).',
+        ruleCheckMessage: 'High-risk field composite score is below abstention threshold (0.70).',
         riskCategory: 'high',
-        decisionStatus: 'manual_verification',
         evidenceRegionDescription: 'Faint ghosting on digit "7". Requires physical voucher confirmation.'
       }
     ]
@@ -276,7 +283,7 @@ const rawPresetConfigs: Array<{
     degradationType: 'thermal_fading',
     degradationSeverity: 'mild',
     overallDecision: 'accepted',
-    reviewerNotes: 'Mild uniform contrast variation. Full trace support across all 7 financial fields.',
+    reviewerNotes: 'Mild uniform contrast variation. High authenticity support across all financial fields.',
     renderConfig: {
       merchantName: 'Pasar Mini Sentosa',
       receiptNumber: 'PMS-40192',
@@ -302,9 +309,8 @@ const rawPresetConfigs: Array<{
         ocrConfidence: 0.99,
         traceSupportScore: 0.98,
         ruleCheckStatus: 'passed',
-        ruleCheckMessage: 'High trace support',
-        riskCategory: 'medium',
-        decisionStatus: 'accepted'
+        ruleCheckMessage: 'High authenticity support',
+        riskCategory: 'medium'
       },
       {
         id: 'p2',
@@ -316,8 +322,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.96,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Clear format',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'p3',
@@ -329,8 +334,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.95,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid date',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'p4',
@@ -342,8 +346,7 @@ const rawPresetConfigs: Array<{
         traceSupportScore: 0.94,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid SST ID',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'p5',
@@ -352,11 +355,10 @@ const rawPresetConfigs: Array<{
         value: 'RM 34.45',
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
         ocrConfidence: 0.96,
-        traceSupportScore: 0.93,
+        traceSupportScore: 0.94,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Arithmetic consistent (32.50 + 1.95 = 34.45)',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       }
     ]
   },
@@ -393,12 +395,11 @@ const rawPresetConfigs: Array<{
         name: 'Merchant Name',
         value: 'RESTORAN KELUARGA MAJU',
         boundingBox: { x: 10, y: 3.5, width: 80, height: 5.5 },
-        ocrConfidence: 0.91,
-        traceSupportScore: 0.86,
+        ocrConfidence: 0.92,
+        traceSupportScore: 0.88,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Verified merchant header',
-        riskCategory: 'medium',
-        decisionStatus: 'accepted'
+        riskCategory: 'medium'
       },
       {
         id: 'r2',
@@ -406,12 +407,11 @@ const rawPresetConfigs: Array<{
         name: 'Receipt Number',
         value: 'RKM-89102',
         boundingBox: { x: 5, y: 19.5, width: 45, height: 4 },
-        ocrConfidence: 0.81,
-        traceSupportScore: 0.76,
+        ocrConfidence: 0.84,
+        traceSupportScore: 0.82,
         ruleCheckStatus: 'warning',
         ruleCheckMessage: 'Oil stain occlusion partially affects edge stroke profile',
-        riskCategory: 'high',
-        decisionStatus: 'warning'
+        riskCategory: 'high'
       },
       {
         id: 'r3',
@@ -419,12 +419,11 @@ const rawPresetConfigs: Array<{
         name: 'Transaction Date',
         value: '19/08/2026',
         boundingBox: { x: 55, y: 19.5, width: 40, height: 4 },
-        ocrConfidence: 0.88,
-        traceSupportScore: 0.84,
+        ocrConfidence: 0.92,
+        traceSupportScore: 0.89,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Date matches August fiscal file',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'r4',
@@ -432,12 +431,11 @@ const rawPresetConfigs: Array<{
         name: 'Total Amount',
         value: 'RM 72.08',
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
-        ocrConfidence: 0.94,
-        traceSupportScore: 0.91,
+        ocrConfidence: 0.95,
+        traceSupportScore: 0.92,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Total verified (68.00 + 4.08 = 72.08)',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       }
     ]
   },
@@ -475,11 +473,10 @@ const rawPresetConfigs: Array<{
         value: 'BENGKEL MOTOR JAYA AUTOPARTS',
         boundingBox: { x: 5, y: 3.5, width: 90, height: 5.5 },
         ocrConfidence: 0.95,
-        traceSupportScore: 0.92,
+        traceSupportScore: 0.93,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Registered auto service provider',
-        riskCategory: 'medium',
-        decisionStatus: 'accepted'
+        riskCategory: 'medium'
       },
       {
         id: 'b2',
@@ -487,12 +484,11 @@ const rawPresetConfigs: Array<{
         name: 'Receipt Number',
         value: 'BMJ-77190',
         boundingBox: { x: 5, y: 19.5, width: 45, height: 4 },
-        ocrConfidence: 0.79,
-        traceSupportScore: 0.74,
+        ocrConfidence: 0.83,
+        traceSupportScore: 0.79,
         ruleCheckStatus: 'warning',
         ruleCheckMessage: 'Crease line intersects digit "7". Review recommended.',
-        riskCategory: 'high',
-        decisionStatus: 'warning'
+        riskCategory: 'high'
       },
       {
         id: 'b3',
@@ -500,12 +496,11 @@ const rawPresetConfigs: Array<{
         name: 'Transaction Date',
         value: '15/08/2026',
         boundingBox: { x: 55, y: 19.5, width: 40, height: 4 },
-        ocrConfidence: 0.93,
-        traceSupportScore: 0.89,
+        ocrConfidence: 0.94,
+        traceSupportScore: 0.91,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Valid transaction timestamp',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       },
       {
         id: 'b4',
@@ -513,12 +508,11 @@ const rawPresetConfigs: Array<{
         name: 'Total Amount',
         value: 'RM 222.60',
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
-        ocrConfidence: 0.92,
-        traceSupportScore: 0.88,
+        ocrConfidence: 0.93,
+        traceSupportScore: 0.90,
         ruleCheckStatus: 'passed',
         ruleCheckMessage: 'Arithmetic consistent (210.00 + 12.60 = 222.60)',
-        riskCategory: 'high',
-        decisionStatus: 'accepted'
+        riskCategory: 'high'
       }
     ]
   }
@@ -529,10 +523,23 @@ export function buildPresetReceiptDocuments(): ReceiptDocument[] {
   return rawPresetConfigs.map((cfg) => {
     const images = generateReceiptImages(cfg.renderConfig);
     const enrichedFields: ReceiptField[] = cfg.fields.map((f) => {
-      const isAbst = f.decisionStatus === 'manual_verification' || f.traceSupportScore < 0.75;
+      const { afieldScore, ruleMultiplier } = calculateAfieldScore(
+        f.traceSupportScore,
+        f.ocrConfidence,
+        f.ruleCheckStatus
+      );
+      const computedStatus = evaluateFieldDecision(afieldScore, f.ruleCheckStatus, 0.85, 0.70);
+      const isAbst = computedStatus === 'manual_verification';
+
       return {
         ...f,
+        pixelQuantileAuth: f.traceSupportScore,
+        quantileQ: 0.10,
+        aggregationMethod: 'q10_quantile',
+        afieldScore,
+        ruleCheckMultiplier: ruleMultiplier,
         originalExtractedValue: f.originalExtractedValue || f.value,
+        decisionStatus: computedStatus,
         isAbstained: isAbst,
         abstentionReason: isAbst
           ? 'This value requires manual verification because available evidence is insufficient.'
@@ -540,7 +547,7 @@ export function buildPresetReceiptDocuments(): ReceiptDocument[] {
         history: [
           {
             timestamp: cfg.processedTimestamp,
-            action: 'System Extraction & Trace Evaluation',
+            action: 'System Extraction & Evidence Evaluation',
             newValue: f.value,
             reviewer: 'DSDNet-Pipeline'
           }
@@ -552,16 +559,32 @@ export function buildPresetReceiptDocuments(): ReceiptDocument[] {
       (f) => f.riskCategory === 'high' && f.decisionStatus !== 'accepted'
     ).length;
 
-    const items = cfg.renderConfig.items.map((it, idx) => ({
-      id: `it-${cfg.id}-${idx}`,
-      description: it.description,
-      quantity: it.qty,
-      unitPrice: parseFloat(it.unitPrice),
-      totalPrice: parseFloat(it.total),
-      traceSupportScore: cfg.degradationSeverity === 'severe' ? 0.62 : 0.91,
-      ocrConfidence: cfg.degradationSeverity === 'severe' ? 0.74 : 0.95,
-      decisionStatus: (cfg.degradationSeverity === 'severe' ? 'manual_verification' : 'accepted') as any
-    }));
+    const items = cfg.renderConfig.items.map((it, idx) => {
+      const traceScore = cfg.degradationSeverity === 'severe' ? 0.48 : 0.92;
+      const ocrConf = cfg.degradationSeverity === 'severe' ? 0.60 : 0.95;
+      const { afieldScore } = calculateAfieldScore(traceScore, ocrConf, 'passed');
+      const itemStatus = evaluateFieldDecision(afieldScore, 'passed', 0.85, 0.70);
+
+      return {
+        id: `it-${cfg.id}-${idx}`,
+        description: it.description,
+        quantity: it.qty,
+        unitPrice: parseFloat(it.unitPrice),
+        totalPrice: parseFloat(it.total),
+        traceSupportScore: traceScore,
+        ocrConfidence: ocrConf,
+        afieldScore,
+        decisionStatus: itemStatus
+      };
+    });
+
+    const hasManual = enrichedFields.some((f) => f.decisionStatus === 'manual_verification');
+    const hasWarning = enrichedFields.some((f) => f.decisionStatus === 'warning');
+    const overallDecision = hasManual
+      ? 'manual_verification'
+      : hasWarning
+      ? 'warning'
+      : 'accepted';
 
     return {
       id: cfg.id,
@@ -570,10 +593,10 @@ export function buildPresetReceiptDocuments(): ReceiptDocument[] {
       uploadTimestamp: cfg.uploadTimestamp,
       processedTimestamp: cfg.processedTimestamp,
       status: 'ready',
-      overallDecision: cfg.overallDecision,
+      overallDecision,
       degradationType: cfg.degradationType,
       degradationSeverity: cfg.degradationSeverity,
-      processingMethod: 'DSDNet-v2.2-DualBranch (Conservative)',
+      processingMethod: 'Unrolled DSDNet (Conservative)',
       processingTimeMs: 420 + Math.floor(Math.random() * 180),
       merchantName: cfg.renderConfig.merchantName,
       receiptNumber: cfg.renderConfig.receiptNumber,
@@ -608,14 +631,20 @@ export function buildPresetAuditRecords(receipts: ReceiptDocument[]): AuditRecor
       auditId: r.auditRecordId,
       receiptId: r.id,
       filename: r.filename,
-      methodId: 'DSDNet-v2.2-Conservative-Abstain',
+      methodId: 'Unrolled-DSDNet-v2.2-Conservative',
+      configVersion: 'v2.2-thesis-ch4',
+      unrollingIterationsK: 4,
+      multiScaleBranchesM: 3,
+      quantileQ: 0.10,
       processingTimestamp: r.processedTimestamp || r.uploadTimestamp,
       inputChecksum: `SHA256:7f9a88e${r.id.slice(-4)}c8b41094df...`,
       outputChecksum: `SHA256:3a1b49e${r.id.slice(-4)}f1a09884bc...`,
       decision: r.overallDecision,
       reviewer: r.reviewerName,
       thresholdConfig: {
-        traceThreshold: 0.75,
+        tauAccept: 0.85,
+        tauWarn: 0.70,
+        traceThreshold: 0.85,
         ocrThreshold: 0.80,
         strictHighRisk: true
       },
@@ -627,9 +656,12 @@ export function buildPresetAuditRecords(receipts: ReceiptDocument[]): AuditRecor
       },
       fieldDetails: r.fields.map((f) => ({
         fieldName: f.name,
+        key: f.key,
         value: f.value,
-        traceScore: f.traceSupportScore,
+        afieldScore: f.afieldScore,
+        pixelQuantileAuth: f.pixelQuantileAuth,
         ocrConf: f.ocrConfidence,
+        ruleStatus: f.ruleCheckStatus,
         status: f.decisionStatus,
         notes: f.reviewerNote,
         isModified: f.isModified
@@ -650,21 +682,21 @@ export function buildPresetAuditRecords(receipts: ReceiptDocument[]): AuditRecor
 export const EVALUATION_METRICS: EvaluationMetric[] = [
   {
     id: 'm-direct',
-    methodName: 'Direct Extraction (Raw)',
+    methodName: 'Direct Extraction (Raw OCR)',
     methodCategory: 'baseline',
     isExecuted: true,
     isPlannedTarget: false,
-    psnr: null, // N/A on raw input
+    psnr: null,
     ssim: null,
-    cer: 28.4, // % Character Error Rate
-    wer: 34.2, // % Word Error Rate
-    fieldAccuracy: 58.6, // %
-    traceF1: null, // No trace branch
+    cer: 28.4,
+    wer: 34.2,
+    fieldAccuracy: 58.6,
+    traceF1: null,
     ece: 0.294,
     faithfulnessAuc: null,
-    abstentionRate: 0.0, // No abstention capability
+    abstentionRate: 0.0,
     acceptedFieldAcc: 58.6,
-    unsupportedAcceptanceRate: 36.8, // High risk of hallucination acceptance
+    unsupportedAcceptanceRate: 36.8,
     processingTimeMs: 145,
     notes: 'Standard Tesseract 5.3 on degraded thermal receipts without restoration or authenticity mapping.'
   },
@@ -724,9 +756,9 @@ export const EVALUATION_METRICS: EvaluationMetric[] = [
     faithfulnessAuc: null,
     abstentionRate: 0.0,
     acceptedFieldAcc: 84.8,
-    unsupportedAcceptanceRate: 14.6, // Generative hallucination risk still present
+    unsupportedAcceptanceRate: 14.6,
     processingTimeMs: 410,
-    notes: 'Dual-stream restoration network generating clean images, but lacking pixel-wise evidence map and abstention.'
+    notes: 'Unrolled restoration network generating clean images, but lacking pixel-wise evidence map and abstention.'
   },
   {
     id: 'm-dsdnet-receipt-proposed',
@@ -738,15 +770,15 @@ export const EVALUATION_METRICS: EvaluationMetric[] = [
     ssim: 0.912,
     cer: 5.4,
     wer: 7.1,
-    fieldAccuracy: 93.8, // Overall
+    fieldAccuracy: 93.8,
     traceF1: 0.892,
-    ece: 0.048, // Well calibrated
+    ece: 0.048,
     faithfulnessAuc: 0.941,
-    abstentionRate: 14.2, // Controlled abstention on degraded fields
-    acceptedFieldAcc: 98.4, // Near-perfect accuracy on accepted fields
-    unsupportedAcceptanceRate: 1.8, // Drastically reduced false acceptance
+    abstentionRate: 14.2,
+    acceptedFieldAcc: 98.4,
+    unsupportedAcceptanceRate: 1.8,
     processingTimeMs: 485,
-    notes: 'Complete pipeline: Conservative Preprocessing + DSDNet Restoration + Pixel Authenticity Heatmap + Rule Checks + Human Verification Loop.'
+    notes: 'Complete pipeline: Conservative Preprocessing + Unrolled DSDNet + Pixel Authenticity Map + Equation (8) Scoring + Human Verification Loop.'
   },
   {
     id: 'm-target-v3',
@@ -754,18 +786,18 @@ export const EVALUATION_METRICS: EvaluationMetric[] = [
     methodCategory: 'proposed',
     isExecuted: false,
     isPlannedTarget: true,
-    psnr: 31.0,
-    ssim: 0.940,
-    cer: 3.2,
-    wer: 4.5,
-    fieldAccuracy: 96.5,
-    traceF1: 0.925,
-    ece: 0.035,
-    faithfulnessAuc: 0.965,
-    abstentionRate: 10.5,
-    acceptedFieldAcc: 99.2,
-    unsupportedAcceptanceRate: 0.8,
-    processingTimeMs: 380,
-    notes: 'Future target with cross-attention transformer priors and multi-scale thermal kernel fusion.'
+    psnr: null,
+    ssim: null,
+    cer: null,
+    wer: null,
+    fieldAccuracy: null,
+    traceF1: null,
+    ece: null,
+    faithfulnessAuc: null,
+    abstentionRate: null,
+    acceptedFieldAcc: null,
+    unsupportedAcceptanceRate: null,
+    processingTimeMs: null,
+    notes: 'Planned research target with cross-attention transformer priors and multi-scale thermal kernel fusion (Metrics to be benchmarked in Phase 2).'
   }
 ];

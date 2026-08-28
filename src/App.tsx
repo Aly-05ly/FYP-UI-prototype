@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import confetti from 'canvas-confetti';
 import { 
   buildPresetReceiptDocuments, 
   buildPresetAuditRecords, 
@@ -13,6 +12,7 @@ import {
   DecisionStatus 
 } from './types';
 import { generateReceiptImages } from './utils/receiptCanvas';
+import { computeCompositeFieldScore, computeFieldDecision } from './utils/fieldScoring';
 
 import { Navbar } from './components/Navbar';
 import { UploadArea } from './components/UploadArea';
@@ -102,22 +102,25 @@ export default function App() {
 
     const updatedFields = activeReceipt.fields.map((f) => {
       if (f.id === fieldId) {
-        const isAbst = newStatus === 'manual_verification';
+        // Enforce rule failure logic: if rule is failed, forced to manual_verification
+        const isRuleFailed = f.ruleCheckStatus === 'failed';
+        const finalStatus = isRuleFailed ? 'manual_verification' : newStatus;
+        const isAbst = finalStatus === 'manual_verification';
         return {
           ...f,
-          decisionStatus: newStatus,
+          decisionStatus: finalStatus,
           isAbstained: isAbst,
           abstentionReason: isAbst
-            ? 'This value requires manual verification because available evidence is insufficient.'
+            ? (isRuleFailed ? 'Validation rule check failed. Value requires manual verification.' : 'This value requires manual verification because available evidence is insufficient.')
             : undefined,
           reviewerNote: note !== undefined ? note : f.reviewerNote,
           history: [
             ...(f.history || []),
             {
               timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-              action: `Reviewer updated status to ${newStatus}`,
+              action: `Reviewer updated status to ${finalStatus}`,
               previousValue: f.decisionStatus,
-              newValue: newStatus,
+              newValue: finalStatus,
               reviewer: settings.reviewerName,
             },
           ],
@@ -158,12 +161,12 @@ export default function App() {
     updateReceiptFieldsAndDecisions(activeReceipt.id, updatedFields);
   };
 
-  // Batch Accept all fields that have trace support >= 0.75
+  // Batch Accept all fields that meet tau_accept (>= 0.85) and passed rules
   const handleBatchAcceptSupported = () => {
     if (!activeReceipt) return;
 
     const updatedFields = activeReceipt.fields.map((f) => {
-      if (f.traceSupportScore >= settings.traceSupportThreshold) {
+      if (f.afieldScore >= 0.85 && f.ruleCheckStatus !== 'failed') {
         return {
           ...f,
           decisionStatus: 'accepted' as DecisionStatus,
@@ -173,7 +176,7 @@ export default function App() {
             ...(f.history || []),
             {
               timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
-              action: 'Batch accepted by reviewer',
+              action: 'Batch accepted by reviewer (A_field >= 0.85)',
               reviewer: settings.reviewerName,
             },
           ],
@@ -183,10 +186,9 @@ export default function App() {
     });
 
     updateReceiptFieldsAndDecisions(activeReceipt.id, updatedFields);
-    confetti({ particleCount: 35, spread: 60, origin: { y: 0.8 } });
   };
 
-  // Save overall receipt approval decision
+  // Save overall receipt review decision
   const handleSaveReceiptDecision = (decision: DecisionStatus, generalNote: string) => {
     if (!activeReceipt) return;
 
@@ -199,6 +201,7 @@ export default function App() {
           overallDecision: decision,
           reviewerNotes: generalNote,
           reviewerName: settings.reviewerName,
+          decisionTimestamp: timestamp
         };
       }
       return r;
@@ -221,7 +224,6 @@ export default function App() {
     });
 
     setAuditRecords(updatedAuditRecords);
-    confetti({ particleCount: 45, spread: 70, origin: { y: 0.7 } });
   };
 
   const updateReceiptFieldsAndDecisions = (receiptId: string, updatedFields: ReceiptField[]) => {
@@ -263,17 +265,16 @@ export default function App() {
     setIsProcessing(true);
     setProcessingStage(1);
 
-    // Simulate 6 pipeline stages with realistic step timings
-    const stageIntervals = [300, 500, 700, 600, 500, 400];
+    // Simulate 5-filter pipeline stages
+    const stageIntervals = [300, 600, 600, 500, 400];
     let currentStep = 1;
 
     const advanceStep = () => {
-      if (currentStep < 6) {
+      if (currentStep < 5) {
         currentStep += 1;
         setProcessingStage(currentStep);
         setTimeout(advanceStep, stageIntervals[currentStep - 1]);
       } else {
-        // Complete execution and generate synthesized receipt document
         setTimeout(() => {
           completeCustomFileUpload(file);
           setIsProcessing(false);
@@ -307,101 +308,110 @@ export default function App() {
 
     const images = generateReceiptImages(renderCfg);
 
-    const newFields: ReceiptField[] = [
+    const rawFieldsData = [
       {
         id: `f-${newId}-1`,
         key: 'merchant_name',
         name: 'Merchant Name',
         value: renderCfg.merchantName,
-        originalExtractedValue: renderCfg.merchantName,
         boundingBox: { x: 10, y: 3.5, width: 80, height: 5.5 },
+        pixelQuantileAuth: 0.94,
         ocrConfidence: 0.96,
-        traceSupportScore: 0.92,
-        ruleCheckStatus: 'passed',
+        ruleCheckStatus: 'passed' as const,
         ruleCheckMessage: 'Registered Malaysian merchant pattern verified',
-        riskCategory: 'medium',
-        decisionStatus: 'accepted',
-        isAbstained: false,
-        evidenceRegionDescription: 'Clear thermal ink absorption footprint without fading.',
+        ruleCheckMultiplier: 1.0,
+        riskCategory: 'medium' as const,
       },
       {
         id: `f-${newId}-2`,
         key: 'receipt_number',
         name: 'Receipt Number',
         value: renderCfg.receiptNumber,
-        originalExtractedValue: renderCfg.receiptNumber,
         boundingBox: { x: 5, y: 19.5, width: 45, height: 4 },
+        pixelQuantileAuth: 0.92,
         ocrConfidence: 0.91,
-        traceSupportScore: 0.88,
-        ruleCheckStatus: 'passed',
+        ruleCheckStatus: 'passed' as const,
         ruleCheckMessage: 'Standard Malaysian tax invoice numbering [INV-XXXXXX]',
-        riskCategory: 'high',
-        decisionStatus: 'accepted',
-        isAbstained: false,
-        evidenceRegionDescription: 'High stroke continuity in alphanumeric block.',
+        ruleCheckMultiplier: 1.0,
+        riskCategory: 'high' as const,
       },
       {
         id: `f-${newId}-3`,
         key: 'date',
         name: 'Transaction Date',
         value: renderCfg.date,
-        originalExtractedValue: renderCfg.date,
         boundingBox: { x: 55, y: 19.5, width: 40, height: 4 },
+        pixelQuantileAuth: 0.93,
         ocrConfidence: 0.94,
-        traceSupportScore: 0.89,
-        ruleCheckStatus: 'passed',
+        ruleCheckStatus: 'passed' as const,
         ruleCheckMessage: 'Calendar date verified',
-        riskCategory: 'high',
-        decisionStatus: 'accepted',
-        isAbstained: false,
+        ruleCheckMultiplier: 1.0,
+        riskCategory: 'high' as const,
       },
       {
         id: `f-${newId}-4`,
         key: 'tax_identifier',
         name: 'Tax Identifier (SST / TIN)',
         value: renderCfg.taxId,
-        originalExtractedValue: renderCfg.taxId,
         boundingBox: { x: 15, y: 13, width: 70, height: 4 },
+        pixelQuantileAuth: 0.91,
         ocrConfidence: 0.93,
-        traceSupportScore: 0.89,
-        ruleCheckStatus: 'passed',
+        ruleCheckStatus: 'passed' as const,
         ruleCheckMessage: 'Valid SST ID format',
-        riskCategory: 'high',
-        decisionStatus: 'accepted',
-        isAbstained: false,
+        ruleCheckMultiplier: 1.0,
+        riskCategory: 'high' as const,
       },
       {
         id: `f-${newId}-5`,
         key: 'tax_amount',
         name: 'Tax Amount (SST 6%)',
         value: `RM ${renderCfg.taxAmount}`,
-        originalExtractedValue: `RM ${renderCfg.taxAmount}`,
         boundingBox: { x: 5, y: 60, width: 90, height: 4 },
-        ocrConfidence: 0.74,
-        traceSupportScore: 0.69,
-        ruleCheckStatus: 'warning',
-        ruleCheckMessage: 'Moderate thermal fading on decimal tail. 6% calculation = 5.184',
-        riskCategory: 'high',
-        decisionStatus: 'warning',
-        isAbstained: false,
-        evidenceRegionDescription: 'Amber zone in authenticity heatmap. Review recommended.',
+        pixelQuantileAuth: 0.82,
+        ocrConfidence: 0.88,
+        ruleCheckStatus: 'warning' as const,
+        ruleCheckMessage: 'Moderate thermal fading on decimal tail. 6% SST calculation checked.',
+        ruleCheckMultiplier: 0.85,
+        riskCategory: 'high' as const,
       },
       {
         id: `f-${newId}-6`,
         key: 'total_amount',
         name: 'Total Amount',
         value: `RM ${renderCfg.totalAmount}`,
-        originalExtractedValue: `RM ${renderCfg.totalAmount}`,
         boundingBox: { x: 5, y: 64, width: 90, height: 5 },
-        ocrConfidence: 0.91,
-        traceSupportScore: 0.86,
-        ruleCheckStatus: 'passed',
+        pixelQuantileAuth: 0.92,
+        ocrConfidence: 0.95,
+        ruleCheckStatus: 'passed' as const,
         ruleCheckMessage: 'Subtotal (86.40) + Tax (5.18) = Total (91.58)',
-        riskCategory: 'high',
-        decisionStatus: 'accepted',
-        isAbstained: false,
+        ruleCheckMultiplier: 1.0,
+        riskCategory: 'high' as const,
       },
     ];
+
+    const newFields: ReceiptField[] = rawFieldsData.map((raw) => {
+      const afield = computeCompositeFieldScore(raw.pixelQuantileAuth, raw.ocrConfidence, raw.ruleCheckMultiplier);
+      const decision = computeFieldDecision(afield, raw.ruleCheckStatus);
+      return {
+        id: raw.id,
+        key: raw.key,
+        name: raw.name,
+        value: raw.value,
+        originalExtractedValue: raw.value,
+        boundingBox: raw.boundingBox,
+        pixelQuantileAuth: raw.pixelQuantileAuth,
+        ocrConfidence: raw.ocrConfidence,
+        ruleCheckMultiplier: raw.ruleCheckMultiplier,
+        afieldScore: afield,
+        traceSupportScore: afield,
+        ruleCheckStatus: raw.ruleCheckStatus,
+        ruleCheckMessage: raw.ruleCheckMessage,
+        riskCategory: raw.riskCategory,
+        decisionStatus: decision.decisionStatus,
+        isAbstained: decision.isAbstained,
+        abstentionReason: decision.abstentionReason,
+      };
+    });
 
     const newDoc: ReceiptDocument = {
       id: newId,
@@ -413,7 +423,7 @@ export default function App() {
       overallDecision: 'warning',
       degradationType: 'thermal_fading',
       degradationSeverity: 'moderate',
-      processingMethod: settings.processingMethod,
+      processingMethod: 'Unrolled DSDNet + Authenticity Map',
       processingTimeMs: 485,
       merchantName: renderCfg.merchantName,
       receiptNumber: renderCfg.receiptNumber,
@@ -429,6 +439,7 @@ export default function App() {
         totalPrice: parseFloat(it.total),
         traceSupportScore: 0.88,
         ocrConfidence: 0.93,
+        afieldScore: 0.88,
         decisionStatus: 'accepted',
       })),
       fields: newFields,
@@ -439,24 +450,32 @@ export default function App() {
       heatmapImageUrl: images.heatmapImageUrl,
       overlayImageUrl: images.overlayImageUrl,
       auditRecordId: `AUD-${newId}`,
-      reviewerNotes: 'Processed via custom upload pipeline. Restored using dual-branch DSDNet.',
+      reviewerNotes: 'Processed via custom upload (5-filter pipeline simulation).',
       reviewerName: settings.reviewerName,
       highRiskReviewCount: 1,
+      inputChecksumSHA256: `SHA256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`,
+      outputChecksumSHA256: `SHA256:8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4`,
     };
 
     const newAudit: AuditRecord = {
       auditId: `AUD-${newId}`,
       receiptId: newId,
       filename: file.name,
-      methodId: settings.processingMethod,
+      methodId: 'Unrolled DSDNet + Authenticity Map',
+      configVersion: 'v2.2-Thesis-Fig4.1',
+      unrollingIterationsK: 4,
+      multiScaleBranchesM: 3,
+      quantileQ: 0.10,
       processingTimestamp: timestamp,
-      inputChecksum: `SHA256:4a8b92e${newId.slice(-4)}df890123...`,
-      outputChecksum: `SHA256:9c1a55e${newId.slice(-4)}ab778401...`,
+      inputChecksum: `SHA256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`,
+      outputChecksum: `SHA256:8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4`,
       decision: 'warning',
       reviewer: settings.reviewerName,
       thresholdConfig: {
-        traceThreshold: settings.traceSupportThreshold,
-        ocrThreshold: settings.ocrConfidenceThreshold,
+        tauAccept: 0.85,
+        tauWarn: 0.70,
+        traceThreshold: 0.85,
+        ocrThreshold: 0.70,
         strictHighRisk: true,
       },
       fieldDecisionsSummary: {
@@ -467,12 +486,15 @@ export default function App() {
       },
       fieldDetails: newFields.map((f) => ({
         fieldName: f.name,
+        key: f.key,
         value: f.value,
-        traceScore: f.traceSupportScore,
+        afieldScore: f.afieldScore,
+        pixelQuantileAuth: f.pixelQuantileAuth,
         ocrConf: f.ocrConfidence,
+        ruleStatus: f.ruleCheckStatus,
         status: f.decisionStatus,
       })),
-      notes: 'Custom uploaded receipt processed.',
+      notes: 'Custom uploaded receipt processed through 5-filter pipeline simulation.',
       exportHistory: [],
     };
 
@@ -568,7 +590,7 @@ export default function App() {
               setSelectedField(null);
               setActiveTab('review');
             }}
-            onViewAudit={(auditId) => {
+            onViewAudit={() => {
               setActiveTab('audit');
             }}
           />
@@ -606,17 +628,15 @@ export default function App() {
         />
       )}
 
-      {/* Global Bottom Status Bar */}
+      {/* Clean Global Bottom Status Bar */}
       <footer className="bg-slate-900 text-slate-400 text-[11px] border-t border-slate-800 px-4 py-2 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-3">
-          <span>DSDNet-Receipt Framework v2.2</span>
+        <div className="flex items-center gap-2 text-slate-300">
+          <span className="font-semibold">DSDNet-Receipt</span>
           <span className="text-slate-600">•</span>
-          <span>Method: {settings.processingMethod.split(' ')[0]}</span>
-          <span className="text-slate-600 hidden sm:inline">•</span>
-          <span className="hidden sm:inline">Trace Cutoff T_trace: {(settings.traceSupportThreshold * 100).toFixed(0)}%</span>
+          <span className="text-slate-400">Evidence-Bounded Document Review</span>
         </div>
-        <div className="font-mono text-[10px] text-slate-500">
-          Local Storage: {settings.localStoragePath}
+        <div className="text-slate-500 font-mono text-[10px]">
+          Decision Support System (Equation 8 & Abstention Filter)
         </div>
       </footer>
     </div>

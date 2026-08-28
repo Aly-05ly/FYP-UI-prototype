@@ -57,9 +57,9 @@ export const UploadArea: React.FC<UploadAreaProps> = ({
 
   const validateAndSetFile = (file: File) => {
     setValidationError(null);
-    const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+    const validTypes = ['image/jpeg', 'image/png', 'image/jpg'];
     if (!validTypes.includes(file.type)) {
-      setValidationError('Invalid file format. Only JPEG and PNG thermal receipt images are supported.');
+      setValidationError('Invalid file format. Only JPEG and PNG thermal receipt images are supported (.webp is not supported).');
       setSelectedFile(null);
       return;
     }
@@ -112,7 +112,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({
                   {selectedFile.name}
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  {(selectedFile.size / 1024).toFixed(1)} KB • Image Validated
+                  {(selectedFile.size / 1024).toFixed(1)} KB • Image Validated (Simulated pipeline prototype)
                 </span>
               </div>
             </div>
@@ -121,9 +121,14 @@ export const UploadArea: React.FC<UploadAreaProps> = ({
               <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-teal-600 mb-1 border border-slate-200">
                 <UploadCloud className="w-6 h-6" />
               </div>
-              <p className="text-xs sm:text-sm font-semibold text-slate-800">
-                Drag & drop degraded receipt image, or <span className="text-teal-600 underline">Browse files</span>
-              </p>
+              <div className="flex items-center gap-1.5 justify-center">
+                <p className="text-xs sm:text-sm font-semibold text-slate-800">
+                  Drag & drop degraded receipt image, or <span className="text-teal-600 underline">Browse files</span>
+                </p>
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                  Simulated pipeline (prototype)
+                </span>
+              </div>
               <p className="text-[11px] text-slate-500">
                 Supported formats: <strong className="text-slate-700">JPEG, PNG</strong> (Thermal paper documents)
               </p>
@@ -156,7 +161,7 @@ export const UploadArea: React.FC<UploadAreaProps> = ({
             className="px-5 py-2 text-xs font-bold rounded-md bg-teal-700 hover:bg-teal-600 text-white flex items-center gap-2 shadow-xs transition-colors disabled:opacity-50"
           >
             <Zap className="w-4 h-4 text-teal-300" />
-            <span>Process Receipt (DSDNet Pipeline)</span>
+            <span>Process Receipt (5-Filter Pipeline)</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

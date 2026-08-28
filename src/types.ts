@@ -33,8 +33,13 @@ export interface ReceiptField {
   value: string;
   originalExtractedValue: string;
   boundingBox: BoundingBox;
-  ocrConfidence: number; // 0.0 to 1.0
-  traceSupportScore: number; // 0.0 to 1.0
+  ocrConfidence: number; // C_OCR(f) in [0.0, 1.0]
+  traceSupportScore: number; // Pixel authenticity support Q_q in [0.0, 1.0]
+  pixelQuantileAuth: number; // Q_q(pixel authenticity in B_f)
+  quantileQ?: number; // default e.g. 0.10 (10th percentile)
+  aggregationMethod?: string; // 'q10_quantile' | 'mean'
+  afieldScore: number; // Composite score A_field(f) = Q_q * C_OCR * P_rule
+  ruleCheckMultiplier?: number; // P_rule(f) in {1.0, 0.85, 0.0}
   ruleCheckStatus: 'passed' | 'warning' | 'failed';
   ruleCheckMessage: string;
   riskCategory: RiskCategory;
@@ -55,6 +60,7 @@ export interface ItemLine {
   totalPrice: number;
   traceSupportScore: number;
   ocrConfidence: number;
+  afieldScore: number;
   decisionStatus: DecisionStatus;
 }
 
@@ -64,6 +70,9 @@ export interface ReceiptDocument {
   fileSizeKb: number;
   uploadTimestamp: string;
   processedTimestamp?: string;
+  decisionTimestamp?: string;
+  inputChecksumSHA256?: string;
+  outputChecksumSHA256?: string;
   status: ProcessingStatus;
   overallDecision: DecisionStatus;
   degradationType: 'thermal_fading' | 'uneven_lighting' | 'creased_tear' | 'oil_stain' | 'heavy_blur';
@@ -95,14 +104,20 @@ export interface AuditRecord {
   receiptId: string;
   filename: string;
   methodId: string;
+  configVersion: string;
+  unrollingIterationsK: number; // e.g. 4
+  multiScaleBranchesM: number; // e.g. 3
+  quantileQ: number; // e.g. 0.10
   processingTimestamp: string;
   inputChecksum: string;
   outputChecksum: string;
   decision: DecisionStatus;
   reviewer: string;
   thresholdConfig: {
-    traceThreshold: number;
-    ocrThreshold: number;
+    tauAccept: number; // e.g. 0.85
+    tauWarn: number; // e.g. 0.70
+    traceThreshold: number; // 0.85
+    ocrThreshold: number; // 0.80
     strictHighRisk: boolean;
   };
   fieldDecisionsSummary: {
@@ -113,9 +128,12 @@ export interface AuditRecord {
   };
   fieldDetails: {
     fieldName: string;
+    key?: string;
     value: string;
-    traceScore: number;
+    afieldScore: number;
+    pixelQuantileAuth: number;
     ocrConf: number;
+    ruleStatus: 'passed' | 'warning' | 'failed';
     status: DecisionStatus;
     notes?: string;
     isModified?: boolean;
@@ -152,10 +170,16 @@ export interface EvaluationMetric {
 export interface AppSettings {
   processingMethod: string;
   baselineMode: string;
-  traceSupportThreshold: number; // e.g. 0.75
-  ocrConfidenceThreshold: number; // e.g. 0.80
+  tauAccept: number; // 0.85 (Thesis Chapter 4 §4.3.2)
+  tauWarn: number; // 0.70
+  traceSupportThreshold: number; // 0.85
+  ocrConfidenceThreshold: number; // 0.80
   strictHighRiskMultiplier: number;
   autoAbstainLowSupport: boolean;
+  evaluationMode: boolean; // Locks thresholds to thesis defaults
+  unrollingIterationsK: number; // K=4
+  multiScaleBranchesM: number; // M=3
+  quantileQ: number; // q=0.10
   localStoragePath: string;
   dataRetentionDays: number;
   reviewerName: string;

@@ -5,8 +5,6 @@ import {
   ShieldCheck, 
   BarChart3, 
   Settings, 
-  AlertCircle,
-  FlaskConical,
   UserCheck
 } from 'lucide-react';
 
@@ -65,24 +63,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="bg-slate-900 text-slate-100 border-b border-slate-800 sticky top-0 z-30 select-none">
-      {/* Top Research Disclaimer Banner */}
-      <div className="bg-slate-950 px-4 py-1 text-[11px] text-slate-400 border-b border-slate-800/60 flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 font-semibold text-teal-400">
-            <FlaskConical className="w-3.5 h-3.5" />
-            ACADEMIC RESEARCH PROTOTYPE
-          </span>
-          <span className="text-slate-600 hidden sm:inline">•</span>
-          <span className="text-slate-400 hidden sm:inline">
-            Evidence-supported thermal receipt recovery & trace-based field verification.
-          </span>
-        </div>
-        <div className="flex items-center gap-2 text-slate-400 font-mono text-[10px]">
-          <AlertCircle className="w-3 h-3 text-amber-400 shrink-0" />
-          <span>Non-certifying research tool (No official MyInvois legal claim)</span>
-        </div>
-      </div>
-
       {/* Main Navigation Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
         {/* Left: App Identity */}
@@ -100,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   DSDNet-Receipt
                 </span>
                 <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-slate-800 text-teal-400 border border-slate-700">
-                  v2.2-Dual
+                  Evidence Review
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 leading-none">Document Forensics & Verification</p>

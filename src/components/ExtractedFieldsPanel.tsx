@@ -16,7 +16,8 @@ import {
   Info,
   CornerDownRight,
   MessageSquarePlus,
-  ArrowRight
+  ArrowRight,
+  Layers
 } from 'lucide-react';
 import { ReceiptDocument, ReceiptField, DecisionStatus } from '../types';
 import { exportReceiptAsJSON, exportReceiptAsCSV } from '../utils/exportUtils';
@@ -79,11 +80,11 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           <div className="flex items-center gap-2">
             <h2 className="font-bold text-sm text-slate-100">Extracted Structured Fields</h2>
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-teal-400 border border-slate-700">
-              Fixed OCR + Trace Evaluator
+              Eq.(8) Composite Scoring
             </span>
           </div>
           <p className="text-[11px] text-slate-400 mt-0.5">
-            Cross-checking OCR outputs against pixel-wise authenticity support
+            Evaluating A_field(f) = Q_q(B_f) × C_OCR(f) × P_rule(f) against thesis thresholds
           </p>
         </div>
 
@@ -130,15 +131,15 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">
             <CheckCircle className="w-3 h-3 text-emerald-600" />
-            {acceptedCount} Accepted
+            {acceptedCount} Accepted (≥0.85)
           </span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
             <AlertTriangle className="w-3 h-3 text-amber-600" />
-            {warningCount} Warning
+            {warningCount} Warning (0.70-0.84)
           </span>
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-800 border border-red-200 font-medium">
             <AlertOctagon className="w-3 h-3 text-red-600" />
-            {manualCount} Manual
+            {manualCount} Abstained (&lt;0.70)
           </span>
         </div>
 
@@ -169,7 +170,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
           <div>
             <span className="font-semibold">{highRiskIssues} High-Risk Financial Field(s) Require Review.</span>
             <p className="text-[11px] text-red-800 mt-0.5">
-              Available ink trace support is insufficient for automated confirmation. Review source evidence before approving.
+              Available pixel authenticity support is insufficient for automated confirmation. Review source evidence before confirming decision.
             </p>
           </div>
         </div>
@@ -295,43 +296,51 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                     <div className="mt-2 p-2 rounded bg-red-100/70 border border-red-200 text-[11px] text-red-900 flex items-start gap-1.5">
                       <AlertOctagon className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-semibold block">Abstained by System</span>
+                        <span className="font-semibold block">Abstained by System (§4.3.2)</span>
                         <span>This value requires manual verification because available evidence is insufficient.</span>
                       </div>
                     </div>
                   )}
 
-                  {/* Row Bottom: Evidence Metrics (OCR Conf, Trace Score, Rule Check) */}
-                  <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[11px]">
-                    {/* OCR Conf */}
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase block font-semibold">OCR Conf</span>
-                      <span className="font-mono font-medium text-slate-700">
-                        {(field.ocrConfidence * 100).toFixed(0)}%
-                      </span>
-                    </div>
-
-                    {/* Trace Support */}
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase block font-semibold">Trace Support</span>
+                  {/* Row Bottom: Equation (8) Composite Score Breakdown */}
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 grid grid-cols-4 gap-1.5 text-[10px]">
+                    {/* Composite Score A_field */}
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[8px] text-slate-500 uppercase block font-bold">A_field(f)</span>
                       <span
-                        className={`font-mono font-bold ${
-                          field.traceSupportScore >= 0.75
+                        className={`font-mono font-bold text-xs ${
+                          field.afieldScore >= 0.85
                             ? 'text-emerald-700'
-                            : field.traceSupportScore >= 0.45
+                            : field.afieldScore >= 0.70
                             ? 'text-amber-700'
                             : 'text-red-700'
                         }`}
                       >
-                        {(field.traceSupportScore * 100).toFixed(0)}%
+                        {(field.afieldScore * 100).toFixed(1)}%
                       </span>
                     </div>
 
-                    {/* Rule Check */}
-                    <div>
-                      <span className="text-[9px] text-slate-400 uppercase block font-semibold">Rule Check</span>
+                    {/* Pixel Authenticity Q_q */}
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[8px] text-slate-500 uppercase block font-semibold">Q_q(Auth)</span>
+                      <span className="font-mono font-medium text-slate-800">
+                        {(field.pixelQuantileAuth * 100).toFixed(0)}%
+                      </span>
+                    </div>
+
+                    {/* OCR Conf C_OCR */}
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[8px] text-slate-500 uppercase block font-semibold">C_OCR</span>
+                      <span className="font-mono font-medium text-slate-800">
+                        {(field.ocrConfidence * 100).toFixed(0)}%
+                      </span>
+                    </div>
+
+                    {/* Rule Check P_rule */}
+                    <div className="bg-slate-50 p-1.5 rounded border border-slate-200">
+                      <span className="text-[8px] text-slate-500 uppercase block font-semibold">P_rule</span>
                       <span
-                        className={`font-medium truncate block ${
+                        className={`font-mono font-semibold block truncate ${
                           field.ruleCheckStatus === 'passed'
                             ? 'text-emerald-700'
                             : field.ruleCheckStatus === 'warning'
@@ -340,7 +349,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                         }`}
                         title={field.ruleCheckMessage}
                       >
-                        {field.ruleCheckStatus === 'passed' ? 'Passed' : field.ruleCheckStatus === 'warning' ? 'Check' : 'Failed'}
+                        {field.ruleCheckStatus === 'passed' ? '1.0' : field.ruleCheckStatus === 'warning' ? '0.85' : '0.0'}
                       </span>
                     </div>
                   </div>
@@ -408,7 +417,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                     <th className="px-2.5 py-1.5 text-left">Qty & Description</th>
                     <th className="px-2 py-1.5 text-right">Price</th>
                     <th className="px-2 py-1.5 text-right">Total</th>
-                    <th className="px-2 py-1.5 text-center">Trace</th>
+                    <th className="px-2 py-1.5 text-center">A_field</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -427,12 +436,14 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
                       <td className="px-2 py-1.5 text-center font-mono text-[10px]">
                         <span
                           className={`px-1.5 py-0.2 rounded font-bold ${
-                            it.traceSupportScore >= 0.75
+                            it.afieldScore >= 0.85
                               ? 'bg-emerald-100 text-emerald-800'
+                              : it.afieldScore >= 0.70
+                              ? 'bg-amber-100 text-amber-800'
                               : 'bg-red-100 text-red-800'
                           }`}
                         >
-                          {(it.traceSupportScore * 100).toFixed(0)}%
+                          {(it.afieldScore * 100).toFixed(0)}%
                         </span>
                       </td>
                     </tr>
@@ -454,7 +465,7 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
             className="flex-1 py-1.5 px-3 rounded bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-xs"
           >
             <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-            <span>Accept Trace-Supported Fields</span>
+            <span>Accept Evidence-Supported Fields (A_field ≥ 0.85)</span>
           </button>
         </div>
 
@@ -476,25 +487,21 @@ export const ExtractedFieldsPanel: React.FC<ExtractedFieldsPanelProps> = ({
         {/* Save Review Decision */}
         <div className="flex items-center gap-2">
           <button
+            id="btn-confirm-review-decision"
             onClick={() => onSaveReceiptDecision('accepted', generalNote)}
             className="flex-1 py-1.5 text-xs font-semibold rounded bg-emerald-700 hover:bg-emerald-600 text-white flex items-center justify-center gap-1 shadow-xs"
           >
             <CheckCircle className="w-3.5 h-3.5" />
-            <span>Approve Receipt</span>
+            <span>Confirm Review Decision</span>
           </button>
           <button
+            id="btn-abstain-review-decision"
             onClick={() => onSaveReceiptDecision('manual_verification', generalNote)}
             className="py-1.5 px-3 text-xs font-semibold rounded bg-red-700 hover:bg-red-600 text-white flex items-center justify-center gap-1 shadow-xs"
           >
             <AlertOctagon className="w-3.5 h-3.5" />
             <span>Abstain / Flag</span>
           </button>
-        </div>
-
-        {/* Bottom Research Compliance Boundary Disclaimer */}
-        <div className="text-[10px] text-slate-500 bg-white p-2 rounded border border-slate-200 leading-tight">
-          <span className="font-semibold text-slate-700 block">Research Boundary Notice:</span>
-          This prototype supports human review of receipt evidence. It does not certify compliance or replace official verification.
         </div>
       </div>
     </div>

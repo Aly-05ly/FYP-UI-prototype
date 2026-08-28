@@ -9,7 +9,10 @@ import {
   Check, 
   RotateCcw, 
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  ToggleLeft,
+  ToggleRight,
+  Calculator
 } from 'lucide-react';
 import { AppSettings } from '../types';
 
@@ -31,6 +34,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     });
   };
 
+  const isEvaluationMode = settings.evaluationMode ?? true;
+
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 space-y-6">
       {/* Header */}
@@ -42,7 +47,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <h1 className="font-bold text-lg text-slate-900">System & Verification Settings</h1>
             <p className="text-xs text-slate-500">
-              Configure DSDNet restoration pipelines, trace evidence thresholds, local storage, and audit parameters.
+              Configure Unrolled DSDNet restoration pipelines, abstention thresholds, local storage, and audit parameters.
             </p>
           </div>
         </div>
@@ -53,6 +58,55 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         >
           <RotateCcw className="w-3.5 h-3.5" />
           <span>Reset Defaults</span>
+        </button>
+      </div>
+
+      {/* EVALUATION MODE TOGGLE BANNER */}
+      <div className={`p-4 rounded-lg border flex items-start justify-between gap-4 ${
+        isEvaluationMode 
+          ? 'bg-teal-50/80 border-teal-300 text-teal-950' 
+          : 'bg-amber-50/80 border-amber-300 text-amber-950'
+      }`}>
+        <div className="flex items-start gap-3">
+          <Lock className={`w-5 h-5 shrink-0 mt-0.5 ${isEvaluationMode ? 'text-teal-700' : 'text-amber-700'}`} />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm">
+                {isEvaluationMode ? 'Evaluation Mode Active (Thesis Locked Thresholds)' : 'Custom Experimentation Mode'}
+              </span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                isEvaluationMode ? 'bg-teal-200 text-teal-900' : 'bg-amber-200 text-amber-900'
+              }`}>
+                {isEvaluationMode ? 'Read-Only Locks' : 'Customizable'}
+              </span>
+            </div>
+            <p className="text-xs mt-1 text-slate-600 leading-relaxed">
+              {isEvaluationMode
+                ? 'Thresholds are locked to Chapter 4 (§4.3.2) evaluation benchmark settings (τ_accept = 0.85, τ_warn = 0.70). Toggle off to test custom sensitivity parameters.'
+                : 'Custom parameter adjustments enabled. Note: results generated in this mode deviate from the standard thesis benchmark settings.'}
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => handleChange('evaluationMode', !isEvaluationMode)}
+          className={`shrink-0 px-3 py-1.5 rounded-md font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-xs ${
+            isEvaluationMode
+              ? 'bg-teal-700 hover:bg-teal-800 text-white'
+              : 'bg-amber-700 hover:bg-amber-800 text-white'
+          }`}
+        >
+          {isEvaluationMode ? (
+            <>
+              <Lock className="w-3.5 h-3.5" />
+              <span>Unlock Custom Mode</span>
+            </>
+          ) : (
+            <>
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Lock to Evaluation Mode</span>
+            </>
+          )}
         </button>
       </div>
 
@@ -67,28 +121,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div>
             <label className="font-semibold text-slate-700 block mb-1">Active Restoration Method:</label>
             <select
+              disabled={isEvaluationMode}
               value={settings.processingMethod}
               onChange={(e) => handleChange('processingMethod', e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-teal-500 focus:outline-none"
+              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-teal-500 focus:outline-none disabled:opacity-75 disabled:bg-slate-100 cursor-pointer disabled:cursor-not-allowed"
             >
               <option value="DSDNet-v2.2-DualBranch (Conservative)">
-                DSDNet-v2.2-DualBranch (Conservative - Recommended)
+                Unrolled DSDNet (Conservative Restoration - Recommended)
               </option>
               <option value="DSDNet-v2.1-Standard">DSDNet-v2.1-Standard (Dual Branch)</option>
               <option value="DSDNet-NoAuthenticity-Branch">DSDNet-NoAuthenticity-Branch (Restoration Only)</option>
               <option value="Baseline-CLAHE-Bilateral">Baseline-CLAHE-Bilateral (Classical)</option>
             </select>
             <span className="text-[11px] text-slate-500 mt-1 block">
-              Generates pixel-wise trace support heatmaps alongside restored documents.
+              Generates pixel-wise authenticity support maps alongside restored documents.
             </span>
           </div>
 
           <div>
-            <label className="font-semibold text-slate-700 block mb-1">Baseline Operational Mode:</label>
+            <label className="font-semibold text-slate-700 block mb-1">Operational Mode:</label>
             <select
+              disabled={isEvaluationMode}
               value={settings.baselineMode}
               onChange={(e) => handleChange('baselineMode', e.target.value)}
-              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-teal-500 focus:outline-none"
+              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-teal-500 focus:outline-none disabled:opacity-75 disabled:bg-slate-100 cursor-pointer disabled:cursor-not-allowed"
             >
               <option value="Proposed (Restoration + Authenticity + Abstention)">
                 Proposed (Restoration + Authenticity + Abstention)
@@ -105,38 +161,76 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
       {/* 2. CONFIDENCE & EVIDENCE THRESHOLDS */}
       <div className="bg-white p-5 rounded-lg border border-slate-200 shadow-xs space-y-4">
-        <h2 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-teal-600" />
-          2. Trace Support & OCR Acceptance Thresholds
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-xs text-slate-800 uppercase tracking-wide flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-teal-600" />
+            2. Abstention Thresholds (§4.3.2 Equation 8)
+          </h2>
+          {isEvaluationMode && (
+            <span className="text-[11px] font-mono text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 flex items-center gap-1 font-semibold">
+              <Lock className="w-3 h-3 text-teal-600" /> Locked to Thesis Benchmarks
+            </span>
+          )}
+        </div>
 
         <div className="space-y-4 text-xs">
-          {/* Trace Support Threshold */}
+          {/* Acceptance Threshold tau_accept */}
           <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <span className="font-semibold text-slate-800">Minimum Trace Support Threshold (T_trace):</span>
+                <span className="font-semibold text-slate-800">Acceptance Threshold (τ_accept):</span>
                 <p className="text-[11px] text-slate-500">
-                  Substrate ink stroke density required for automated acceptance.
+                  Minimum composite score A_field(f) for automated acceptance.
                 </p>
               </div>
               <span className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-slate-300 text-teal-700">
-                {(settings.traceSupportThreshold * 100).toFixed(0)}%
+                {(settings.tauAccept * 100).toFixed(0)}%
               </span>
             </div>
             <input
               type="range"
-              min="0.50"
+              disabled={isEvaluationMode}
+              min="0.75"
               max="0.95"
-              step="0.05"
-              value={settings.traceSupportThreshold}
-              onChange={(e) => handleChange('traceSupportThreshold', parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+              step="0.01"
+              value={settings.tauAccept}
+              onChange={(e) => handleChange('tauAccept', parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>50% (Permissive)</span>
-              <span>75% (Default Recommended)</span>
-              <span>95% (Strict Forensic)</span>
+              <span>75%</span>
+              <span className="font-bold text-teal-800">85% (Thesis Standard)</span>
+              <span>95%</span>
+            </div>
+          </div>
+
+          {/* Warning Threshold tau_warn */}
+          <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-slate-800">Warning Threshold (τ_warn):</span>
+                <p className="text-[11px] text-slate-500">
+                  Cutoff below which fields are marked for mandatory manual review / abstention.
+                </p>
+              </div>
+              <span className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-slate-300 text-amber-700">
+                {(settings.tauWarn * 100).toFixed(0)}%
+              </span>
+            </div>
+            <input
+              type="range"
+              disabled={isEvaluationMode}
+              min="0.50"
+              max="0.80"
+              step="0.01"
+              value={settings.tauWarn}
+              onChange={(e) => handleChange('tauWarn', parseFloat(e.target.value))}
+              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+            <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+              <span>50%</span>
+              <span className="font-bold text-amber-800">70% (Thesis Standard)</span>
+              <span>80%</span>
             </div>
           </div>
 
@@ -144,9 +238,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-slate-50 p-3.5 rounded-md border border-slate-200 space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <span className="font-semibold text-slate-800">Minimum OCR Confidence Threshold (T_ocr):</span>
+                <span className="font-semibold text-slate-800">OCR Confidence Cutoff (C_OCR):</span>
                 <p className="text-[11px] text-slate-500">
-                  Fixed OCR glyph classification probability cutoff.
+                  Fixed OCR glyph classification probability baseline.
                 </p>
               </div>
               <span className="font-mono font-bold text-sm bg-white px-2 py-0.5 rounded border border-slate-300 text-blue-700">
@@ -155,12 +249,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <input
               type="range"
+              disabled={isEvaluationMode}
               min="0.60"
               max="0.95"
               step="0.05"
               value={settings.ocrConfidenceThreshold}
               onChange={(e) => handleChange('ocrConfidenceThreshold', parseFloat(e.target.value))}
-              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
 
@@ -176,7 +271,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div>
                 <span className="font-semibold text-slate-800 block">Automatic Abstention Routing</span>
                 <span className="text-[11px] text-slate-500">
-                  Mark fields as "Manual Verification" whenever trace support is below T_trace.
+                  Route fields to "Manual Verification" whenever A_field(f) is below τ_warn (0.70).
                 </span>
               </div>
             </label>
@@ -188,15 +283,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center gap-2">
                 <input
                   type="number"
+                  disabled={isEvaluationMode}
                   min="1.0"
                   max="1.5"
                   step="0.05"
                   value={settings.strictHighRiskMultiplier}
                   onChange={(e) => handleChange('strictHighRiskMultiplier', parseFloat(e.target.value) || 1.15)}
-                  className="w-20 p-1 text-xs font-mono bg-slate-50 border border-slate-300 rounded"
+                  className="w-20 p-1 text-xs font-mono bg-slate-50 border border-slate-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <span className="text-[11px] text-slate-500">
-                  Applies +15% stricter threshold to Total, Tax Amount, and SST ID.
+                  Applies +15% stricter criteria to Total, Tax Amount, and SST ID.
                 </span>
               </div>
             </div>

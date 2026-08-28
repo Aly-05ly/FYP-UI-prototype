@@ -120,24 +120,24 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({
     },
     {
       id: 'restored',
-      title: '2. Restored Receipt (DSDNet)',
-      badge: 'Dual-Branch Restored',
+      title: '2. Restored Receipt (Unrolled DSDNet)',
+      badge: 'Unrolled DSDNet Restoration',
       badgeColor: 'bg-teal-100 text-teal-900 border-teal-300',
       imageUrl: receipt.restoredImageUrl,
-      description: 'Reconstructed strokes & background de-shadowed',
+      description: 'Reconstructed thermal strokes & ink substrate denoising',
     },
     {
       id: 'heatmap',
-      title: '3. Authenticity Heatmap',
-      badge: 'Pixel-Wise Trace Support T(x,y)',
+      title: '3. Authenticity Heatmap M_auth',
+      badge: 'Pixel Authenticity Support Q_q',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
       imageUrl: receipt.heatmapImageUrl,
-      description: 'Evidence support density & abstention mask',
+      description: 'Pixel-level evidence density & stroke continuity',
     },
     {
       id: 'overlay',
-      title: '4. Blended Overlay View',
-      badge: 'DSDNet + Heatmap Blend',
+      title: '4. Blended Evidence Overlay',
+      badge: 'DSDNet + Heatmap Alpha Blend',
       badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
       imageUrl: receipt.overlayImageUrl,
       description: `Alpha blend: ${(heatmapOpacity * 100).toFixed(0)}%`,
@@ -278,32 +278,32 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({
         </div>
       </div>
 
-      {/* Authenticity Heatmap Legend Strip */}
+      {/* Authenticity Heatmap Legend Strip (Thesis §4.3.2 Thresholds) */}
       <div className="bg-slate-900 text-slate-100 px-4 py-1.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 text-[11px]">
         <div className="flex items-center gap-4 flex-wrap">
           <span className="font-semibold text-slate-300 flex items-center gap-1">
             <Info className="w-3.5 h-3.5 text-teal-400" />
-            Heatmap Trace Support Legend:
+            Authenticity Support Legend:
           </span>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-emerald-500 border border-emerald-300 inline-block" />
-            <span className="font-medium text-emerald-300">Trace-supported</span>
-            <span className="text-slate-400 font-mono text-[10px]">(≥ 0.75)</span>
+            <span className="font-medium text-emerald-300">High Authenticity (Accepted)</span>
+            <span className="text-slate-400 font-mono text-[10px]">(≥ 0.85)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-amber-500 border border-amber-300 inline-block" />
-            <span className="font-medium text-amber-300">Uncertain</span>
-            <span className="text-slate-400 font-mono text-[10px]">(0.45 – 0.74)</span>
+            <span className="font-medium text-amber-300">Moderate (Warning)</span>
+            <span className="text-slate-400 font-mono text-[10px]">(0.70 – 0.84)</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-red-600 border border-red-400 inline-block" />
-            <span className="font-medium text-red-300">Low support (Abstained)</span>
-            <span className="text-slate-400 font-mono text-[10px]">(&lt; 0.45)</span>
+            <span className="font-medium text-red-300">Low Support (Manual Review)</span>
+            <span className="text-slate-400 font-mono text-[10px]">(&lt; 0.70)</span>
           </div>
         </div>
         <div className="flex items-center gap-2 text-slate-400 text-[10px]">
           <MousePointerClick className="w-3 h-3 text-teal-400" />
-          <span>Click any bounding box to inspect forensic evidence</span>
+          <span>Click any bounding box to inspect forensic evidence & Equation (8) score</span>
         </div>
       </div>
 
@@ -403,9 +403,9 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({
             {/* Panel 2: Restored with Heatmap Overlay Toggle */}
             <div className="bg-white rounded-md border border-slate-200 shadow-xs flex flex-col overflow-hidden">
               <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                <span className="font-semibold text-slate-800 text-xs">Restored Receipt + Trace Heatmap</span>
+                <span className="font-semibold text-slate-800 text-xs">Restored Receipt + Authenticity Heatmap</span>
                 <span className="text-[10px] px-2 py-0.5 rounded bg-teal-100 text-teal-800 font-mono">
-                  DSDNet Reconstruction
+                  Unrolled DSDNet Restoration
                 </span>
               </div>
               <div className="flex-1 flex items-center justify-center p-3 bg-slate-50/50 overflow-hidden relative">
@@ -474,7 +474,7 @@ export const EvidenceViewer: React.FC<EvidenceViewerProps> = ({
                 Original (Degraded)
               </div>
               <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-teal-900/80 text-white text-[10px] font-mono z-10">
-                DSDNet Restored
+                Unrolled DSDNet Restored
               </div>
             </div>
             <p className="text-slate-500 text-xs mt-2 text-center">
@@ -585,7 +585,7 @@ const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
               height: `${field.boundingBox.height}%`,
             }}
             className={`absolute border cursor-pointer transition-all duration-150 rounded-xs group flex items-start justify-between p-0.5 ${borderColor}`}
-            title={`${field.name}: ${field.value} (Trace: ${(field.traceSupportScore * 100).toFixed(0)}%, Status: ${field.decisionStatus})`}
+            title={`${field.name}: ${field.value}\nA_field(f): ${(field.afieldScore * 100).toFixed(1)}% | Q_q: ${(field.pixelQuantileAuth * 100).toFixed(0)}% | C_OCR: ${(field.ocrConfidence * 100).toFixed(0)}% | Status: ${field.decisionStatus}`}
           >
             <span
               className={`text-[8px] font-mono font-bold px-1 rounded shadow-xs leading-none ${

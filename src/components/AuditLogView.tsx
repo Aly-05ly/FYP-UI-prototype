@@ -3,22 +3,15 @@ import {
   ShieldCheck, 
   Search, 
   Download, 
-  FileCode, 
   CheckCircle, 
   AlertTriangle, 
   AlertOctagon, 
   Lock, 
   ExternalLink, 
   X, 
-  FileText, 
-  Cpu, 
-  Sliders, 
-  Calendar, 
-  Hash,
-  UserCheck,
   Eye
 } from 'lucide-react';
-import { AuditRecord, DecisionStatus } from '../types';
+import { AuditRecord } from '../types';
 import { exportAuditRecordAsJSON } from '../utils/exportUtils';
 
 interface AuditLogViewProps {
@@ -52,7 +45,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
             <h1 className="font-bold text-lg text-slate-900">Research Audit Log & Traceability</h1>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Cryptographically structured execution log tracking pipeline methods, pixel trace thresholds, and reviewer decisions.
+            Structured execution log tracking pipeline methods, Equation (8) composite scores, abstention thresholds, and reviewer decisions.
           </p>
         </div>
 
@@ -249,25 +242,25 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
               {/* Threshold Parameters */}
               <div className="bg-white p-4 rounded-md border border-slate-200">
                 <span className="font-bold text-slate-800 uppercase tracking-wide text-[11px] block mb-2">
-                  2. Configured Evaluation Thresholds
+                  2. Abstention Thresholds (§4.3.2)
                 </span>
                 <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-                  <div className="bg-slate-50 p-2 rounded border border-slate-200">
-                    <span className="text-slate-500 text-[10px] block">Trace Threshold (T_trace)</span>
-                    <span className="font-mono font-bold text-slate-800 text-sm">
-                      {(selectedRecord.thresholdConfig.traceThreshold * 100).toFixed(0)}%
+                  <div className="bg-emerald-50/70 p-2 rounded border border-emerald-200">
+                    <span className="text-emerald-800 text-[10px] block font-semibold">Accept Threshold (τ_accept)</span>
+                    <span className="font-mono font-bold text-emerald-900 text-sm">
+                      {selectedRecord.thresholdConfig.traceThreshold >= 0.8 ? '≥ 0.85' : `${(selectedRecord.thresholdConfig.traceThreshold * 100).toFixed(0)}%`}
                     </span>
                   </div>
-                  <div className="bg-slate-50 p-2 rounded border border-slate-200">
-                    <span className="text-slate-500 text-[10px] block">OCR Confidence (T_ocr)</span>
-                    <span className="font-mono font-bold text-slate-800 text-sm">
-                      {(selectedRecord.thresholdConfig.ocrThreshold * 100).toFixed(0)}%
+                  <div className="bg-amber-50/70 p-2 rounded border border-amber-200">
+                    <span className="text-amber-800 text-[10px] block font-semibold">Warning Threshold (τ_warn)</span>
+                    <span className="font-mono font-bold text-amber-900 text-sm">
+                      0.70 – 0.85
                     </span>
                   </div>
-                  <div className="bg-slate-50 p-2 rounded border border-slate-200">
-                    <span className="text-slate-500 text-[10px] block">Strict High-Risk Multiplier</span>
-                    <span className="font-mono font-bold text-slate-800 text-sm">
-                      {selectedRecord.thresholdConfig.strictHighRisk ? '1.15x Enabled' : 'Disabled'}
+                  <div className="bg-rose-50/70 p-2 rounded border border-rose-200">
+                    <span className="text-rose-800 text-[10px] block font-semibold">Manual Review Threshold</span>
+                    <span className="font-mono font-bold text-rose-900 text-sm">
+                      &lt; 0.70 or Rule Failure
                     </span>
                   </div>
                 </div>
@@ -276,7 +269,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
               {/* Field Decisions Table */}
               <div className="bg-white p-4 rounded-md border border-slate-200">
                 <span className="font-bold text-slate-800 uppercase tracking-wide text-[11px] block mb-2">
-                  3. Field Decisions Snapshot
+                  3. Field Decisions Snapshot & Composite Score A_field (Eq. 8)
                 </span>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left divide-y divide-slate-200 text-xs">
@@ -284,7 +277,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
                       <tr>
                         <th className="px-2 py-1.5">Field</th>
                         <th className="px-2 py-1.5">Value</th>
-                        <th className="px-2 py-1.5 text-center">Trace Support</th>
+                        <th className="px-2 py-1.5 text-center">A_field Score</th>
                         <th className="px-2 py-1.5 text-center">OCR Conf</th>
                         <th className="px-2 py-1.5 text-center">Decision</th>
                       </tr>
@@ -295,18 +288,18 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({
                           <td className="px-2 py-1.5 font-sans font-medium text-slate-800">{f.fieldName}</td>
                           <td className="px-2 py-1.5 font-bold text-slate-900">{f.value}</td>
                           <td className="px-2 py-1.5 text-center">
-                            <span className={f.traceScore >= 0.75 ? 'text-emerald-700' : 'text-red-700'}>
-                              {(f.traceScore * 100).toFixed(0)}%
+                            <span className={f.traceScore >= 0.85 ? 'text-emerald-700 font-bold' : f.traceScore >= 0.70 ? 'text-amber-700 font-bold' : 'text-rose-700 font-bold'}>
+                              {f.traceScore.toFixed(3)}
                             </span>
                           </td>
                           <td className="px-2 py-1.5 text-center text-slate-600">
-                            {(f.ocrConf * 100).toFixed(0)}%
+                            {f.ocrConf.toFixed(2)}
                           </td>
                           <td className="px-2 py-1.5 text-center font-sans">
                             <span className={`px-1.5 py-0.2 rounded text-[10px] font-semibold ${
                               f.status === 'accepted' ? 'bg-emerald-100 text-emerald-800' : f.status === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
                             }`}>
-                              {f.status}
+                              {f.status === 'accepted' ? 'Accept' : f.status === 'warning' ? 'Warning' : 'Manual Review'}
                             </span>
                           </td>
                         </tr>

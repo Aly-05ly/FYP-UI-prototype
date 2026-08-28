@@ -11,7 +11,8 @@ import {
   Cpu, 
   Zap, 
   Sparkles,
-  Info
+  Info,
+  Clock
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { EVALUATION_METRICS } from '../data/sampleReceipts';
@@ -23,9 +24,9 @@ export const EvaluationDashboard: React.FC = () => {
 
   const selectedMetric = EVALUATION_METRICS.find((m) => m.id === selectedMethodId) || EVALUATION_METRICS[4];
 
-  // Chart data formatting
+  // Chart data formatting: only plot benchmarks with executed empirical runs
   const chartData = EVALUATION_METRICS.filter((m) => m.isExecuted).map((m) => ({
-    name: m.methodName.split(' ')[0] + (m.methodName.includes('Proposed') ? ' (Proposed)' : ''),
+    name: m.methodName.split(' ')[0],
     fullName: m.methodName,
     fieldAccuracy: m.fieldAccuracy ?? 0,
     acceptedFieldAcc: m.acceptedFieldAcc ?? 0,
@@ -45,7 +46,7 @@ export const EvaluationDashboard: React.FC = () => {
             <h1 className="font-bold text-lg text-slate-900">Research Baseline & Evaluation Dashboard</h1>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Empirical benchmarking comparing raw OCR, classical filtering, unconstrained DSDNet, and the proposed DSDNet-Receipt verification framework.
+            Empirical benchmarking comparing raw OCR, classical filtering, unconstrained DSDNet, and planned thesis target framework.
           </p>
         </div>
 
@@ -87,7 +88,7 @@ export const EvaluationDashboard: React.FC = () => {
                   <span className="font-bold truncate">{m.methodName}</span>
                   {m.isPlannedTarget ? (
                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded border border-blue-400 text-blue-300 bg-blue-950">
-                      Target
+                      Planned Target
                     </span>
                   ) : (
                     <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded ${
@@ -98,7 +99,7 @@ export const EvaluationDashboard: React.FC = () => {
                   )}
                 </div>
                 <span className={`text-[10px] block truncate ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
-                  {m.isExecuted ? `Field Acc: ${m.fieldAccuracy}% • CER: ${m.cer}%` : 'Phase 2 Target'}
+                  {m.isExecuted ? `Field Acc: ${m.fieldAccuracy}% • CER: ${m.cer}%` : 'Phase 2 Evaluation Target'}
                 </span>
               </button>
             );
@@ -114,7 +115,7 @@ export const EvaluationDashboard: React.FC = () => {
               <h2 className="font-bold text-base text-slate-900">{selectedMetric.methodName}</h2>
               {selectedMetric.isPlannedTarget ? (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold border border-blue-300 text-blue-800 bg-blue-50">
-                  Planned Target (Unexecuted)
+                  Planned Target (Evaluation Pending)
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
@@ -125,6 +126,18 @@ export const EvaluationDashboard: React.FC = () => {
             <p className="text-xs text-slate-500 mt-1">{selectedMetric.notes}</p>
           </div>
         </div>
+
+        {selectedMetric.isPlannedTarget && (
+          <div className="p-3 rounded-md bg-blue-50/80 border border-blue-200 flex items-start gap-2 text-xs text-blue-900">
+            <Clock className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold">Research Target Specification:</span>
+              <p className="text-[11px] text-blue-800 mt-0.5">
+                This proposed architecture (Unrolled DSDNet + Authenticity Map + Abstention) is the designated thesis target. Numerical metrics will be populated during the formal empirical evaluation phase on the test dataset.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* 12 Metric KPI Cards Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -227,7 +240,7 @@ export const EvaluationDashboard: React.FC = () => {
             <span className="text-[10px] text-slate-500">Evidence retention AUC</span>
           </div>
 
-          {/* 12. Processing Time */}
+          {/* 12. Processing Latency */}
           <div className="bg-slate-50 p-3 rounded-md border border-slate-200">
             <span className="text-[10px] uppercase font-bold text-slate-500 block">Proc Latency</span>
             <div className="text-lg font-mono font-bold text-slate-900 mt-0.5">
@@ -238,16 +251,16 @@ export const EvaluationDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Comparative Charts Section */}
+      {/* Comparative Charts Section (Executed Baselines) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Chart A: Field Accuracy & Safe Accepted Accuracy */}
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-col">
           <div className="mb-3">
             <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wide">
-              Comparative Accuracy & Accepted-Field Precision (%)
+              Executed Baselines: Field Accuracy & Accepted-Field Acc (%)
             </h3>
             <p className="text-[11px] text-slate-500">
-              Notice how DSDNet-Receipt achieves 98.4% accuracy on accepted fields through controlled abstention.
+              Comparison across executed experimental benchmarks (Methods 1-4).
             </p>
           </div>
           <div className="h-64 w-full">
@@ -269,10 +282,10 @@ export const EvaluationDashboard: React.FC = () => {
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-xs flex flex-col">
           <div className="mb-3">
             <h3 className="font-bold text-xs text-slate-800 uppercase tracking-wide">
-              Hallucination Risk: Unsupported Acceptance vs CER (%)
+              Executed Baselines: False Acceptance vs CER (%)
             </h3>
             <p className="text-[11px] text-slate-500">
-              Lower is better. Trace-support verification reduces false acceptance down to 1.8%.
+              Lower is better. Demonstrates error rates prior to proposed abstention pipeline.
             </p>
           </div>
           <div className="h-64 w-full">
@@ -323,7 +336,7 @@ export const EvaluationDashboard: React.FC = () => {
                   <tr
                     key={m.id}
                     className={`hover:bg-slate-50 transition-colors ${
-                      isProposed ? 'bg-teal-50/40 font-semibold' : ''
+                      isProposed ? 'bg-blue-50/30 font-semibold' : ''
                     }`}
                   >
                     <td className="px-3 py-2.5 font-sans font-medium text-slate-900">
@@ -331,7 +344,7 @@ export const EvaluationDashboard: React.FC = () => {
                     </td>
                     <td className="px-2 py-2.5 text-center font-sans">
                       {m.isPlannedTarget ? (
-                        <span className="text-[9px] px-1.5 py-0.2 rounded border border-blue-300 text-blue-700 bg-blue-50">
+                        <span className="text-[9px] px-1.5 py-0.2 rounded border border-blue-300 text-blue-700 bg-blue-50 font-bold">
                           Target
                         </span>
                       ) : (
@@ -369,7 +382,7 @@ export const EvaluationDashboard: React.FC = () => {
 
 function formatMetric(val: number | null | undefined, suffix = ''): string {
   if (val === null || val === undefined) {
-    return 'N/A';
+    return '—';
   }
   return `${val}${suffix}`;
 }

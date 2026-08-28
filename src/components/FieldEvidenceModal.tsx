@@ -12,7 +12,8 @@ import {
   HelpCircle,
   Eye,
   Check,
-  Edit2
+  Edit2,
+  Calculator
 } from 'lucide-react';
 import { ReceiptDocument, ReceiptField, DecisionStatus } from '../types';
 
@@ -83,10 +84,10 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
                 <Eye className="w-4 h-4 text-teal-600" />
-                Pixel Region Forensic Comparison (Bounding Box Crop)
+                Pixel Region Forensic Comparison (Bounding Box B_f Crop)
               </span>
               <span className="text-[11px] text-slate-500 font-mono">
-                Box: [x:{x.toFixed(1)}%, y:{y.toFixed(1)}%, w:{width.toFixed(1)}%, h:{height.toFixed(1)}%]
+                Box B_f: [x:{x.toFixed(1)}%, y:{y.toFixed(1)}%, w:{width.toFixed(1)}%, h:{height.toFixed(1)}%]
               </span>
             </div>
 
@@ -94,13 +95,12 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
               {/* Panel A: Original Crop */}
               <div className="bg-white rounded-md border border-slate-300 p-3 shadow-xs flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-700">1. Original Input Source</span>
+                  <span className="text-xs font-semibold text-slate-700">1. Original Input Substrate</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono">
                     Degraded
                   </span>
                 </div>
                 <div className="flex-1 bg-slate-100 rounded border border-slate-200 p-2 flex items-center justify-center min-h-[140px] overflow-hidden relative">
-                  {/* Zoomed in crop container */}
                   <div className="relative overflow-hidden w-full h-[120px] rounded bg-white flex items-center justify-center">
                     <img
                       src={receipt.originalImageUrl}
@@ -117,14 +117,14 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-2 italic">
-                  Thermal fading, paper fibers, and raw ink baseline.
+                  Thermal fading, substrate grain, and ink baseline.
                 </p>
               </div>
 
               {/* Panel B: Restored Crop */}
               <div className="bg-white rounded-md border border-slate-300 p-3 shadow-xs flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-700">2. DSDNet Restored</span>
+                  <span className="text-xs font-semibold text-slate-700">2. Unrolled DSDNet Restored</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 font-mono">
                     Reconstructed
                   </span>
@@ -145,16 +145,16 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-2">
-                  Recovered strokes synthesized by dual-branch restoration.
+                  Reconstructed strokes via unrolled DSDNet iterations.
                 </p>
               </div>
 
               {/* Panel C: Heatmap Crop */}
               <div className="bg-white rounded-md border border-slate-300 p-3 shadow-xs flex flex-col">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-semibold text-slate-700">3. Authenticity Heatmap</span>
+                  <span className="text-xs font-semibold text-slate-700">3. Pixel Authenticity Map</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 font-mono">
-                    Trace T(x,y)
+                    M_auth(x,y)
                   </span>
                 </div>
                 <div className="flex-1 bg-slate-100 rounded border border-slate-200 p-2 flex items-center justify-center min-h-[140px] overflow-hidden relative">
@@ -173,128 +173,103 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                   </div>
                 </div>
                 <p className="text-[10px] text-slate-500 mt-2 font-mono">
-                  Score: <span className="font-bold text-slate-800">{(field.traceSupportScore * 100).toFixed(1)}%</span>
-                  {field.traceSupportScore >= 0.75 ? ' (Trace-supported)' : ' (Requires verification)'}
+                  Q_0.10(B_f): <span className="font-bold text-slate-800">{(field.pixelQuantileAuth * 100).toFixed(1)}%</span>
                 </p>
               </div>
             </div>
           </div>
 
-          {/* 2. FIELD VALUE & OCR EVALUATION DATA */}
+          {/* 2. EQUATION (8) COMPOSITE FORMULA BREAKDOWN */}
           <div className="bg-white rounded-md border border-slate-300 p-4 shadow-xs">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                Extracted Field Details & Diagnostic Metrics
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                <Calculator className="w-4 h-4 text-teal-600" />
+                Equation (8) Composite Field Authenticity Score Formulation
               </span>
-              <span className="text-xs text-slate-500 font-mono">Field Key: {field.key}</span>
+              <span className="text-xs font-mono bg-teal-50 text-teal-900 px-2 py-0.5 rounded border border-teal-200 font-bold">
+                A_field(f) = {(field.afieldScore * 100).toFixed(1)}%
+              </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              {/* Field Value Display / Edit */}
-              <div className="sm:col-span-2 bg-slate-50 p-3 rounded border border-slate-200">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-600">Active Field Value:</span>
-                  <button
-                    onClick={() => setIsEditingValue(!isEditingValue)}
-                    className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                    <span>{isEditingValue ? 'Done' : 'Manual Override'}</span>
-                  </button>
-                </div>
+            <div className="bg-slate-900 text-slate-100 p-3 rounded-md font-mono text-xs mb-3 overflow-x-auto">
+              <div className="text-teal-300 mb-1">
+                A_field(f) = Q_q(pixel authenticity in B_f) × C_OCR(f) × P_rule(f)
+              </div>
+              <div className="text-slate-300 text-[11px]">
+                A_field(f) = {(field.pixelQuantileAuth).toFixed(3)} × {(field.ocrConfidence).toFixed(3)} × {(field.ruleCheckMultiplier ?? (field.ruleCheckStatus === 'passed' ? 1.0 : field.ruleCheckStatus === 'warning' ? 0.85 : 0.0)).toFixed(2)} = <strong className="text-teal-400">{(field.afieldScore).toFixed(4)}</strong> ({ (field.afieldScore * 100).toFixed(1) }%)
+              </div>
+            </div>
 
-                {isEditingValue ? (
-                  <input
-                    type="text"
-                    value={currentValue}
-                    onChange={(e) => setCurrentValue(e.target.value)}
-                    className="w-full text-sm font-mono font-bold px-2 py-1.5 bg-white border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
-                  />
-                ) : (
-                  <div className="font-mono font-bold text-slate-900 text-base bg-white p-2 rounded border border-slate-200 select-all">
-                    {currentValue}
-                  </div>
-                )}
-                {field.originalExtractedValue !== currentValue && (
-                  <span className="text-[10px] text-slate-500 mt-1 block">
-                    Original OCR extraction: <code className="font-mono">{field.originalExtractedValue}</code>
-                  </span>
-                )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              {/* Quantile pixel support */}
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">1. Q_0.10 Authenticity</span>
+                <span className="text-base font-mono font-bold text-slate-800 mt-0.5 block">
+                  {(field.pixelQuantileAuth * 100).toFixed(1)}%
+                </span>
+                <span className="text-[10px] text-slate-500">10th percentile pixel evidence in B_f</span>
               </div>
 
               {/* OCR Confidence */}
-              <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-600 block mb-1">OCR Confidence:</span>
-                <div className="text-lg font-mono font-bold text-slate-800">
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">2. C_OCR Confidence</span>
+                <span className="text-base font-mono font-bold text-slate-800 mt-0.5 block">
                   {(field.ocrConfidence * 100).toFixed(1)}%
-                </div>
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-                  <div
-                    style={{ width: `${field.ocrConfidence * 100}%` }}
-                    className="bg-blue-600 h-full rounded-full"
-                  />
-                </div>
-              </div>
-
-              {/* Trace Support Score */}
-              <div className="bg-slate-50 p-3 rounded border border-slate-200">
-                <span className="text-[11px] font-semibold text-slate-600 block mb-1">Trace Support Score:</span>
-                <div
-                  className={`text-lg font-mono font-bold ${
-                    field.traceSupportScore >= 0.75
-                      ? 'text-emerald-700'
-                      : field.traceSupportScore >= 0.45
-                      ? 'text-amber-700'
-                      : 'text-red-700'
-                  }`}
-                >
-                  {(field.traceSupportScore * 100).toFixed(1)}%
-                </div>
-                <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-                  <div
-                    style={{ width: `${field.traceSupportScore * 100}%` }}
-                    className={`h-full rounded-full ${
-                      field.traceSupportScore >= 0.75
-                        ? 'bg-emerald-600'
-                        : field.traceSupportScore >= 0.45
-                        ? 'bg-amber-500'
-                        : 'bg-red-600'
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Rule Check & Evidence Findings */}
-            <div className="mt-3 pt-3 border-t border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
-                <span className="font-semibold text-slate-700 block mb-0.5">Deterministic Rule Check:</span>
-                <div className="flex items-center gap-1.5">
-                  {field.ruleCheckStatus === 'passed' ? (
-                    <CheckCircle className="w-4 h-4 text-emerald-600" />
-                  ) : field.ruleCheckStatus === 'warning' ? (
-                    <AlertTriangle className="w-4 h-4 text-amber-600" />
-                  ) : (
-                    <AlertOctagon className="w-4 h-4 text-red-600" />
-                  )}
-                  <span className="text-slate-800">{field.ruleCheckMessage}</span>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
-                <span className="font-semibold text-slate-700 block mb-0.5">Substrate Forensics Note:</span>
-                <span className="text-slate-600">
-                  {field.evidenceRegionDescription ||
-                    'Thermal pigment trace verified against background luminance histogram.'}
                 </span>
+                <span className="text-[10px] text-slate-500">Glyph classification probability</span>
+              </div>
+
+              {/* Rule Multiplier */}
+              <div className="bg-slate-50 p-2.5 rounded border border-slate-200">
+                <span className="text-[10px] uppercase font-bold text-slate-500 block">3. P_rule Validation</span>
+                <span className={`text-base font-mono font-bold mt-0.5 block ${
+                  field.ruleCheckStatus === 'passed' ? 'text-emerald-700' : field.ruleCheckStatus === 'warning' ? 'text-amber-700' : 'text-red-700'
+                }`}>
+                  {field.ruleCheckStatus === 'passed' ? '1.0 (Passed)' : field.ruleCheckStatus === 'warning' ? '0.85 (Warn)' : '0.0 (Failed)'}
+                </span>
+                <span className="text-[10px] text-slate-500">{field.ruleCheckMessage}</span>
               </div>
             </div>
           </div>
 
-          {/* 3. REVIEWER DECISION & AUDIT ACTION */}
+          {/* 3. FIELD VALUE & OVERRIDE */}
+          <div className="bg-white rounded-md border border-slate-300 p-4 shadow-xs">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                Extracted Field Value & Manual Override
+              </span>
+              <button
+                onClick={() => setIsEditingValue(!isEditingValue)}
+                className="text-[11px] text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+              >
+                <Edit2 className="w-3 h-3" />
+                <span>{isEditingValue ? 'Done Editing' : 'Manual Override'}</span>
+              </button>
+            </div>
+
+            {isEditingValue ? (
+              <input
+                type="text"
+                value={currentValue}
+                onChange={(e) => setCurrentValue(e.target.value)}
+                className="w-full text-sm font-mono font-bold px-2 py-1.5 bg-white border border-blue-400 rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
+              />
+            ) : (
+              <div className="font-mono font-bold text-slate-900 text-base bg-slate-50 p-2 rounded border border-slate-200 select-all">
+                {currentValue}
+              </div>
+            )}
+            {field.originalExtractedValue !== currentValue && (
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                Original extraction: <code className="font-mono">{field.originalExtractedValue}</code>
+              </span>
+            )}
+          </div>
+
+          {/* 4. REVIEWER DECISION & AUDIT ACTION */}
           <div className="bg-white rounded-md border border-slate-300 p-4 shadow-xs">
             <span className="text-xs font-bold text-slate-800 uppercase tracking-wide block mb-3">
-              Record Reviewer Decision for this Field
+              Record Reviewer Decision for this Field (§4.3.2 Thresholds)
             </span>
 
             {/* Status Option Radios */}
@@ -317,7 +292,7 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                 <div>
                   <span className="font-bold text-xs text-emerald-900 block flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    Accept Field
+                    Accept Field (A_field ≥ 0.85)
                   </span>
                   <span className="text-[11px] text-slate-600">
                     Evidence and OCR result meet confidence threshold.
@@ -343,10 +318,10 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                 <div>
                   <span className="font-bold text-xs text-amber-900 block flex items-center gap-1">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                    Warning
+                    Warning (0.70 ≤ A_field &lt; 0.85)
                   </span>
                   <span className="text-[11px] text-slate-600">
-                    Partial uncertainty or soft rule check issue present.
+                    Partial uncertainty or soft rule check warning present.
                   </span>
                 </div>
               </label>
@@ -369,10 +344,10 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
                 <div>
                   <span className="font-bold text-xs text-red-900 block flex items-center gap-1">
                     <AlertOctagon className="w-3.5 h-3.5 text-red-600" />
-                    Manual Verification / Abstain
+                    Manual Verification / Abstain (&lt; 0.70)
                   </span>
                   <span className="text-[11px] text-slate-600">
-                    Evidence is insufficient. Must not be accepted automatically.
+                    Evidence is insufficient or rule failed. Automated acceptance blocked.
                   </span>
                 </div>
               </label>
@@ -381,7 +356,7 @@ export const FieldEvidenceModal: React.FC<FieldEvidenceModalProps> = ({
             {/* Note input */}
             <div className="mt-3">
               <label className="text-[11px] font-semibold text-slate-700 block mb-1">
-                Field Audit & Compliance Note:
+                Field Audit Note:
               </label>
               <input
                 type="text"
